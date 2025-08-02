@@ -4,7 +4,7 @@ from telegram.ext import (
     Application, CommandHandler, ContextTypes
 )
 
-BOT_TOKEN = "YOUR_BOT_TOKEN"  # Replace with your actual token
+BOT_TOKEN = "7710160278:AAEuNEnQOfIz2zNMWGWLLNCiNwiBn_4h-gw"  # Replace with your actual token
 
 # Command: /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
