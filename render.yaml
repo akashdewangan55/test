@@ -4,6 +4,3 @@ services:
     env: python
     buildCommand: ""
     startCommand: python app.py
-    envVars:
-      - key: BOT_TOKEN
-        value: 7710160278:AAEuNEnQOfIz2zNMWGWLLNCiNwiBn_4h-gw
