@@ -1,28 +1,27 @@
 from flask import Flask, request
 import telegram
-import os
 
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-bot = telegram.Bot(token=BOT_TOKEN)
+TOKEN = "7710160278:AAEuNEnQOfIz2zNMWGWLLNCiNwiBn_4h-gw"
+bot = telegram.Bot(token=TOKEN)
 
 app = Flask(__name__)
 
-@app.route(f"/{BOT_TOKEN}", methods=["POST"])
-def webhook():
+@app.route(f'/{TOKEN}', methods=['POST'])
+def respond():
     update = telegram.Update.de_json(request.get_json(force=True), bot)
     chat_id = update.message.chat.id
     message = update.message.text
 
     if message == "/start":
-        bot.sendMessage(chat_id=chat_id, text="🤖 Hello! I'm alive using webhooks.")
+        bot.sendMessage(chat_id=chat_id, text="👋 Hello! Webhook is working.")
     else:
         bot.sendMessage(chat_id=chat_id, text="You said: " + message)
 
-    return "OK"
+    return 'ok'
 
-@app.route("/", methods=["GET"])
+@app.route('/')
 def index():
-    return "Bot is running!"
+    return "🤖 Bot is running on Render using webhook!", 200
 
-if __name__ == "__main__":
-    app.run(debug=True)
+if __name__ == '__main__':
+    app.run()
