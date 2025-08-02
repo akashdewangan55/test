@@ -1,27 +1,58 @@
-from flask import Flask, request
-import telegram
+from fastapi import FastAPI, Query
+from fastapi.responses import JSONResponse
+from yt_dlp import YoutubeDL
+import os
 
-TOKEN = "7710160278:AAEuNEnQOfIz2zNMWGWLLNCiNwiBn_4h-gw"
-bot = telegram.Bot(token=TOKEN)
+app = FastAPI()
 
-app = Flask(__name__)
+# Configure download options
+ydl_opts_video = {
+    'format': 'best',
+    'outtmpl': 'downloads/%(title)s.%(ext)s',
+    'quiet': True,
+}
 
-@app.route(f'/{TOKEN}', methods=['POST'])
-def respond():
-    update = telegram.Update.de_json(request.get_json(force=True), bot)
-    chat_id = update.message.chat.id
-    message = update.message.text
+ydl_opts_audio = {
+    'format': 'bestaudio/best',
+    'outtmpl': 'downloads/%(title)s.%(ext)s',
+    'postprocessors': [{
+        'key': 'FFmpegExtractAudio',
+        'preferredcodec': 'mp3',
+    }],
+    'quiet': True,
+}
 
-    if message == "/start":
-        bot.sendMessage(chat_id=chat_id, text="👋 Hello! Webhook is working.")
-    else:
-        bot.sendMessage(chat_id=chat_id, text="You said: " + message)
+@app.get("/")
+def root():
+    return {"message": "YouTube Downloader API is running."}
 
-    return 'ok'
+@app.get("/download/")
+def download_video(url: str = Query(...), type: str = Query("video")):
+    if not os.path.exists("downloads"):
+        os.makedirs("downloads")
 
-@app.route('/')
-def index():
-    return "🤖 Bot is running on Render using webhook!", 200
+    try:
+        ydl_opts = ydl_opts_audio if type == "audio" else ydl_opts_video
+        with YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info)
+            if type == "audio":
+                filename = os.path.splitext(filename)[0] + ".mp3"
 
-if __name__ == '__main__':
-    app.run()
+        return JSONResponse({
+            "title": info.get("title"),
+            "filename": os.path.basename(filename),
+            "path": f"/download_file/{os.path.basename(filename)}"
+        })
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+from fastapi.responses import FileResponse
+
+@app.get("/download_file/{filename}")
+def download_file(filename: str):
+    file_path = os.path.join("downloads", filename)
+    if os.path.exists(file_path):
+        return FileResponse(file_path, filename=filename)
+    return JSONResponse(status_code=404, content={"error": "File not found"})
