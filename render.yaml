@@ -1,8 +1,9 @@
 services:
   - type: web
-    name: my-bot
-    env: python
-    plan: free
+    name: telegram-webhook-bot
+    runtime: python
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app
-    runtime: python-3.10.8
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
