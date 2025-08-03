@@ -3,13 +3,12 @@ from flask import Flask, request
 from telegram import Bot, Update
 from telegram.ext import Dispatcher, CommandHandler, CallbackContext
 
-TOKEN = os.getenv("7710160278:AAEuNEnQOfIz2zNMWGWLLNCiNwiBn_4h-gw")
+TOKEN = os.environ.get("BOT_TOKEN")  # Set this in Render environment variables
 bot = Bot(token=TOKEN)
 
 app = Flask(__name__)
 dispatcher = Dispatcher(bot=bot, update_queue=None, workers=0, use_context=True)
 
-# /start command
 def start(update: Update, context: CallbackContext):
     update.message.reply_text("✅ Webhook bot is live!")
 
@@ -26,4 +25,4 @@ def index():
     return "🤖 Webhook bot running!"
 
 if __name__ == '__main__':
-    app.run(port=5000)
+    app.run(host="0.0.0.0", port=5000)
