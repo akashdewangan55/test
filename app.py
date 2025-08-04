@@ -1,28 +1,54 @@
 import os
-from flask import Flask, request
-from telegram import Bot, Update
-from telegram.ext import Dispatcher, CommandHandler, CallbackContext
+import fitz  # PyMuPDF
+from telegram import Update
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from summarizer import summarize_text
 
-TOKEN = os.environ.get("BOT_TOKEN")  # Set this in Render environment variables
-bot = Bot(token=TOKEN)
+TOKEN = "7710160278:AAEuNEnQOfIz2zNMWGWLLNCiNwiBn_4h-gw"  # Replace this with your real bot token
 
-app = Flask(__name__)
-dispatcher = Dispatcher(bot=bot, update_queue=None, workers=0, use_context=True)
+DOWNLOAD_DIR = "downloads"
+os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 def start(update: Update, context: CallbackContext):
-    update.message.reply_text("✅ Webhook bot is live!")
+    update.message.reply_text("👋 Send me a PDF and I’ll summarize it for you!")
 
-dispatcher.add_handler(CommandHandler("start", start))
+def handle_pdf(update: Update, context: CallbackContext):
+    file = update.message.document
+    if file.mime_type != "application/pdf":
+        update.message.reply_text("❌ Please send a valid PDF file.")
+        return
 
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    update = Update.de_json(request.get_json(force=True), bot)
-    dispatcher.process_update(update)
-    return "OK", 200
+    file_path = os.path.join(DOWNLOAD_DIR, file.file_name)
+    file.get_file().download(file_path)
+    update.message.reply_text("📄 PDF received. Extracting text...")
 
-@app.route('/', methods=['GET'])
-def index():
-    return "🤖 Webhook bot running!"
+    # Extract text
+    doc = fitz.open(file_path)
+    full_text = ""
+    for page in doc:
+        full_text += page.get_text()
+    doc.close()
 
-if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5000)
+    if not full_text.strip():
+        update.message.reply_text("⚠️ Couldn't extract any text from this PDF.")
+        return
+
+    update.message.reply_text("🧠 Summarizing text, please wait...")
+
+    # Summarize
+    summary = summarize_text(full_text)
+    update.message.reply_text(f"✅ Summary:\n\n{summary[:4096]}")  # Telegram limit
+
+def main():
+    updater = Updater(TOKEN, use_context=True)
+    dp = updater.dispatcher
+
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(MessageHandler(Filters.document.mime_type("application/pdf"), handle_pdf))
+
+    updater.start_polling()
+    print("✅ Bot is running...")
+    updater.idle()
+
+if __name__ == "__main__":
+    main()
