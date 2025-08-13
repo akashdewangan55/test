@@ -1,54 +1,68 @@
-import os
-import fitz  # PyMuPDF
-from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
-from summarizer import summarize_text
+import yt_dlp
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 
-TOKEN = "7710160278:AAEuNEnQOfIz2zNMWGWLLNCiNwiBn_4h-gw"  # Replace this with your real bot token
+# Initialize the Flask app
+app = Flask(__name__)
 
-DOWNLOAD_DIR = "downloads"
-os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+# Enable Cross-Origin Resource Sharing (CORS)
+# This is crucial for allowing your HTML frontend to communicate with this backend.
+CORS(app)
 
-def start(update: Update, context: CallbackContext):
-    update.message.reply_text("👋 Send me a PDF and I’ll summarize it for you!")
+@app.route('/download', methods=['GET'])
+def download_video():
+    """
+    This endpoint takes a YouTube URL as a query parameter,
+    fetches available video formats, and returns them as JSON.
+    """
+    video_url = request.args.get('url')
+    if not video_url:
+        return jsonify({"error": "URL parameter is missing"}), 400
 
-def handle_pdf(update: Update, context: CallbackContext):
-    file = update.message.document
-    if file.mime_type != "application/pdf":
-        update.message.reply_text("❌ Please send a valid PDF file.")
-        return
+    try:
+        # yt-dlp options
+        ydl_opts = {
+            'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+            'quiet': True # Suppress console output from yt-dlp
+        }
 
-    file_path = os.path.join(DOWNLOAD_DIR, file.file_name)
-    file.get_file().download(file_path)
-    update.message.reply_text("📄 PDF received. Extracting text...")
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # Extract video information
+            info = ydl.extract_info(video_url, download=False)
+            
+            # Prepare a list to hold format details
+            formats = []
+            
+            # The 'formats' key contains a list of available formats
+            if 'formats' in info:
+                for f in info['formats']:
+                    # We only want to show video formats that have both video and audio
+                    if f.get('vcodec') != 'none' and f.get('acodec') != 'none' and f.get('ext') == 'mp4':
+                        formats.append({
+                            "format_id": f.get('format_id'),
+                            "ext": f.get('ext'),
+                            "resolution": f.get('resolution') or f.get('format_note'),
+                            "url": f.get('url') # The direct download link
+                        })
 
-    # Extract text
-    doc = fitz.open(file_path)
-    full_text = ""
-    for page in doc:
-        full_text += page.get_text()
-    doc.close()
+            if not formats:
+                 return jsonify({"error": "No suitable MP4 formats found."}), 404
 
-    if not full_text.strip():
-        update.message.reply_text("⚠️ Couldn't extract any text from this PDF.")
-        return
+            # Return the title and the list of formats
+            return jsonify({
+                "title": info.get('title', 'No title'),
+                "formats": formats
+            })
 
-    update.message.reply_text("🧠 Summarizing text, please wait...")
+    except yt_dlp.utils.DownloadError as e:
+        # Handle errors from yt-dlp (e.g., invalid URL, video unavailable)
+        return jsonify({"error": f"Failed to process video: {str(e)}"}), 500
+    except Exception as e:
+        # Handle other potential errors
+        return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
 
-    # Summarize
-    summary = summarize_text(full_text)
-    update.message.reply_text(f"✅ Summary:\n\n{summary[:4096]}")  # Telegram limit
-
-def main():
-    updater = Updater(TOKEN, use_context=True)
-    dp = updater.dispatcher
-
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(Filters.document.mime_type("application/pdf"), handle_pdf))
-
-    updater.start_polling()
-    print("✅ Bot is running...")
-    updater.idle()
-
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    # Run the app. 
+    # Use 0.0.0.0 to make it accessible from other devices on your network.
+    # The default port is 5000.
+    app.run(host='0.0.0.0', port=5000, debug=True)
